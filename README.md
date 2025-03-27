@@ -61,7 +61,10 @@ Next Steps
 ----------
 * Add tests
 * Add parallelism
+Added a bit of asyncio/aiohttp but it's not really good, caching after everything has done, + I don't have control as it is upon the number of parallel threads (if any) etc.
 * Add authentication
 Adding some basic auth should be doable quite quickly using flask-security for example.
 Actually, since this is a GitHub project, I wonder if one can't "just" create a GitHub App and use the user's tokens to access the API, directly.
 Maybe even use GH Pages to publish it? I've never used it, I'm not sure it's possible to have server-side processing, to be further explored.
+* Add new services
+For example build graphs, output stats, compare different repos, etc.

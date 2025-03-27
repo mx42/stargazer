@@ -13,7 +13,7 @@ wheels/
 .direnv*
 .python-version
 .envrc.local
-cache.db
+cache.db*
 
 # Devenv
 .devenv*

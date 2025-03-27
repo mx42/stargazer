@@ -44,7 +44,9 @@ class StarNeighbours(Resource):
         parser = reqparse.RequestParser()
         parser.add_argument("gh_token", type=str, help="GitHub token override")
         args = parser.parse_args()
-        token = args.get("gh_token", GH_TOKEN)
+        token = args.get("gh_token", None)
+        if not token:
+            token = GH_TOKEN
 
         if not re.match(r"^[A-Za-z0-9_.-]+$", user):
             return {
@@ -63,8 +65,8 @@ class StarNeighbours(Resource):
             return {"message": "Invalid credentials"}, 401
         except MissingRepoException:
             return {"message": "Repository or user not found"}, 404
-        except RuntimeError:
-            return {"message": "Unexpected error"}, 500
+        except RuntimeError as exc:
+            return {"message": f"Unexpected error: {str(exc)}"}, 500
 
 
 def main():

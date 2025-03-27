@@ -29,6 +29,7 @@ class Cacher:
             """
         )
         # TODO: Clean-up old data? Currently data is just filtered out, it might become a mess after some weeks of using it.
+        # Also: maybe we can pull all the data in memory... depends on volume.
         self.max_age_d = max_age_d
         self.fetcher = fetcher
 
@@ -70,7 +71,7 @@ class Cacher:
     def get_user_stars(self, user: str) -> list[str]:
         """
         Returns the stars of an user
-        Tries to fetch it from the cache, otherwise polls GitHub API to get it.
+        Tries to fetch it from the cache, otherwise adds it to a list to be polled from GitHub API.
 
         :param user: user to fetch stars
 
@@ -84,14 +85,25 @@ class Cacher:
             """
         ).fetchall()
         if not len(res):
-            res = self.fetcher.get_user_stars(user)
-            for entry in res:
-                self.conn.sql(
-                    f"insert into users_stars values ('{user}', '{entry}', current_localtimestamp())"
-                )
+            self.fetcher.add_user_to_queue(user)
+            res = []
         else:
             res = [entry[0] for entry in res]
         return res
+
+    def get_users_stars_from_api(self) -> dict[str, list[str]]:
+        """
+        Fetches the users stars we couldn't find in cache from the api, and cache it
+
+        :return: list of starred repositories
+        """
+        result = self.fetcher.get_queued_users_stars()
+        for user, starred in result.items():
+            for entry in starred:
+                self.conn.sql(
+                    f"insert into users_stars values ('{user}', '{entry}', current_localtimestamp())"
+                )
+        return result
 
     def get_starneighbors(self, user: str, repo: str) -> list[dict]:
         """
@@ -102,14 +114,18 @@ class Cacher:
 
         :return: List of dict with key repo (string) and key stargazers (list of strings)
         """
-        starrers = self.get_project_stars(user, repo)
         starneighbors = {}
-        for starrer in starrers:
-            starred = self.get_user_stars(starrer)
-            for star in starred:
-                if star not in starneighbors:
-                    starneighbors[star] = []
-                starneighbors[star].append(starrer)
+        for starrer in self.get_project_stars(user, repo):
+            repos = self.get_user_stars(starrer)
+            for repo in repos:
+                if repo not in starneighbors:
+                    starneighbors[repo] = []
+                starneighbors[repo].append(starrer)
+        for starrer, repos in self.get_users_stars_from_api().items():
+            for repo in repos:
+                if repo not in starneighbors:
+                    starneighbors[repo] = []
+                starneighbors[repo].append(starrer)
         starneighbors.pop(f"{user}/{repo}", None)
         starneighbors = [{"repo": k, "stargazers": v} for k, v in starneighbors.items()]
         return starneighbors
