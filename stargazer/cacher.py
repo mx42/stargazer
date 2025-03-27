@@ -6,6 +6,7 @@ Probably a solution involving GraphQL would have been relevant.
 """
 
 import duckdb
+import logging
 
 
 class Cacher:
@@ -21,6 +22,7 @@ class Cacher:
         :param max_age_d: max age to cache data for, in days
         :param fetcher: fetcher reference
         """
+        # Database file initialization
         self.conn = duckdb.connect(database)
         self.conn.sql(
             """
@@ -30,8 +32,14 @@ class Cacher:
         )
         # TODO: Clean-up old data? Currently data is just filtered out, it might become a mess after some weeks of using it.
         # Also: maybe we can pull all the data in memory... depends on volume.
+
+        # Max cache age to keep
         self.max_age_d = max_age_d
+
+        # Fetcher object
         self.fetcher = fetcher
+
+        self.logger = logging.getLogger(__name__)
 
     def __del__(self):
         """
@@ -61,8 +69,9 @@ class Cacher:
             res = self.fetcher.get_project_stars(user, repo)
             for entry in res:
                 # TODO: Could send the rows as chunks, need to benchmark duckdb's capabilities.
-                self.conn.sql(
-                    f"insert into repo_stars values ('{user}', '{repo}', '{entry}', current_localtimestamp())"
+                self.conn.execute(
+                    "insert into repo_stars values (?, ?, ?, current_localtimestamp())",
+                    [user, repo, entry],
                 )
         else:
             res = [entry[0] for entry in res]
@@ -97,12 +106,23 @@ class Cacher:
 
         :return: list of starred repositories
         """
-        result = self.fetcher.get_queued_users_stars()
+        result, errors = self.fetcher.get_queued_users_stars()
         for user, starred in result.items():
             for entry in starred:
-                self.conn.sql(
-                    f"insert into users_stars values ('{user}', '{entry}', current_localtimestamp())"
+                # TODO: Should chunk/batch insert queries. To be benchmarked
+                self.conn.execute(
+                    "insert into users_stars values (?, ?, current_localtimestamp())",
+                    [user, entry],
                 )
+        if errors:
+            types = {}
+            for error in errors:
+                if type(error) not in types:
+                    types[type(error)] = 0
+                types[type(error)] += 1
+            raise RuntimeError(
+                f"Caught some exceptions fetching the users stars: {str(types)}"
+            )
         return result
 
     def get_starneighbors(self, user: str, repo: str) -> list[dict]:
@@ -117,15 +137,15 @@ class Cacher:
         starneighbors = {}
         for starrer in self.get_project_stars(user, repo):
             repos = self.get_user_stars(starrer)
-            for repo in repos:
-                if repo not in starneighbors:
-                    starneighbors[repo] = []
-                starneighbors[repo].append(starrer)
+            for starred_repo in repos:
+                if starred_repo not in starneighbors:
+                    starneighbors[starred_repo] = []
+                starneighbors[starred_repo].append(starrer)
         for starrer, repos in self.get_users_stars_from_api().items():
-            for repo in repos:
-                if repo not in starneighbors:
-                    starneighbors[repo] = []
-                starneighbors[repo].append(starrer)
+            for starred_repo in repos:
+                if starred_repo not in starneighbors:
+                    starneighbors[starred_repo] = []
+                starneighbors[starred_repo].append(starrer)
         starneighbors.pop(f"{user}/{repo}", None)
         starneighbors = [{"repo": k, "stargazers": v} for k, v in starneighbors.items()]
         return starneighbors

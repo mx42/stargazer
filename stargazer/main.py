@@ -57,8 +57,10 @@ class StarNeighbours(Resource):
                 "message": "Invalid repository, should only contain letters, numbers, _, - and ."
             }, 400
         try:
-            fetcher = Fetcher(token)
+            fetcher = Fetcher(token, max_parallel=10)
+            fetcher.logger = app.logger
             cacher = Cacher(CACHE_DATABASE_FILE, CACHE_MAX_AGE_DAYS, fetcher)
+            cacher.logger = app.logger
             starneighbors = cacher.get_starneighbors(user, repo)
             return starneighbors, 200
         except InvalidCredentialsException:

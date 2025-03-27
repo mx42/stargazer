@@ -4,6 +4,7 @@ Module fetching data from the GitHub API
 
 import aiohttp
 import asyncio
+import logging
 import requests
 
 
@@ -28,19 +29,30 @@ class Fetcher:
     Object centralizing fetching functions from GH API
     """
 
-    def __init__(self, gh_token: str):
+    def __init__(self, gh_token: str, max_parallel: int):
         """
         Constructor - setup GH config
+
+        :param gh_token: Github API token
+        :param max_parallel: Maximum parallel queries
         """
+        # Number of elements per page to fetch - GH default is 30
         self.per_page = 30
+
+        # Maximum number of parallel queries
+        self.max_parallel = max_parallel
+
+        self.logger = logging.getLogger(__name__)
+
+        # Query headers
         self.headers = {
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {gh_token}",
             "X-GitHub-Api-Version": "2022-11-28",
         }
-        self.users_queue = []
 
-        # TODO: Could use the `link` header to handle the pagination.
+        # Queue for parallelising the users stars
+        self.users_queue = []
 
     def get_project_stars(self, user: str, repo: str, page: int = 1) -> list[str]:
         """
@@ -61,8 +73,10 @@ class Fetcher:
             headers=self.headers,
         )
         if res.status_code == 200:
+            # This is clearly not really strong against change in remote schema but whatever
             items = [item["login"] for item in res.json()]
             if len(items) == self.per_page:
+                # TODO: Could use the `link` header to handle pagination. -> more boilerplate but 1 less query on some occurrences
                 items.extend(self.get_project_stars(user, repo, page + 1))
             return items
         elif res.status_code == 401:
@@ -87,13 +101,13 @@ class Fetcher:
         :raises: RuntimeError if any other error occurs from the request
         """
         async with session.get(
-            f"https://api.github.com/users/{user}/starred?per_page={self.per_page}&page={page}",
-            headers=self.headers,
+            f"{user}/starred?per_page={self.per_page}&page={page}"
         ) as res:
             if res.status == 200:
                 items = [item["full_name"] for item in await res.json()]
                 if len(items) == self.per_page:
-                    items.extend(await self.get_user_stars(session, user, page + 1))
+                    _, followup = await self.get_user_stars(session, user, page + 1)
+                    items.extend(followup)
                 return user, items
             elif res.status == 401:
                 raise InvalidCredentialsException()
@@ -109,28 +123,43 @@ class Fetcher:
         """
         self.users_queue.append(user)
 
-    async def run_queued_users_fetch(self) -> dict[str, list[str]]:
+    async def run_queued_users_fetch(
+        self, base_url="https://api.github.com/users/"
+    ) -> dict[str, list[str]]:
         """
         Run async queries to fetch user stars from the api
+
+        :param base_url: Base URL for possible override
+
+        :return: dict of users -> list of repos
         """
-        async with aiohttp.ClientSession() as session:
+        connector = aiohttp.TCPConnector(limit=self.max_parallel)
+        async with aiohttp.ClientSession(
+            headers=self.headers,
+            connector=connector,
+            base_url=base_url,
+        ) as session:
             tasks = []
             for user in self.users_queue:
                 tasks.append(self.get_user_stars(session, user))
             responses = await asyncio.gather(*tasks, return_exceptions=True)
             return responses
 
-    def get_queued_users_stars(self) -> dict[str, list[str]]:
+    def get_queued_users_stars(self) -> (dict[str, list[str]], list[Exception]):
         """
         Fetches queued users stars from the API
         """
+        if not self.users_queue:
+            return {}, []
         resp = asyncio.new_event_loop().run_until_complete(
             self.run_queued_users_fetch()
         )
         response = {}
+        errors = []
         for entry in resp:
             if isinstance(entry, Exception):
-                raise entry
+                errors.append(entry)
+                continue
             user, repos = entry
             response[user] = repos
-        return response
+        return response, errors
