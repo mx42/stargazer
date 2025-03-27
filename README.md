@@ -60,8 +60,6 @@ The code architecture is pretty simple, there's the API endpoint, a "Cacher" to 
 Next Steps
 ----------
 * Add tests
-* Add parallelism
-Added a bit of asyncio/aiohttp but it's not really good, caching after everything has done, + I don't have control as it is upon the number of parallel threads (if any) etc.
 * Add authentication
 Adding some basic auth should be doable quite quickly using flask-security for example.
 Actually, since this is a GitHub project, I wonder if one can't "just" create a GitHub App and use the user's tokens to access the API, directly.
