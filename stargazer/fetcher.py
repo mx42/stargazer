@@ -5,7 +5,13 @@ Module fetching data from the GitHub API
 import aiohttp
 import asyncio
 import logging
+import os
 import requests
+
+if os.getenv("TESTING"):
+    BASE_URL = "http://localhost:8080/"
+else:
+    BASE_URL = "https://api.github.com/"
 
 
 class InvalidCredentialsException(Exception):
@@ -21,6 +27,7 @@ class MissingRepoException(Exception):
     Specific exception for missing user or repo (404)
     """
 
+    # TODO Add repo as attribute
     pass
 
 
@@ -69,7 +76,7 @@ class Fetcher:
         :raises: RuntimeError if any other error occurs from the request
         """
         res = requests.get(
-            f"https://api.github.com/repos/{user}/{repo}/stargazers?per_page={self.per_page}&page={page}",
+            f"{BASE_URL}repos/{user}/{repo}/stargazers?per_page={self.per_page}&page={page}",
             headers=self.headers,
         )
         if res.status_code == 200:
@@ -124,7 +131,7 @@ class Fetcher:
         self.users_queue.append(user)
 
     async def run_queued_users_fetch(
-        self, base_url="https://api.github.com/users/"
+        self, base_url=f"{BASE_URL}users/"
     ) -> dict[str, list[str]]:
         """
         Run async queries to fetch user stars from the api

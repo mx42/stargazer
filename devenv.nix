@@ -2,10 +2,8 @@
 
 {
   # https://devenv.sh/basics/
-  env.GREET = "onefetch";
-
   # https://devenv.sh/packages/
-  packages = [ pkgs.onefetch ];
+  packages = [ pkgs.uv ];
 
   # https://devenv.sh/languages/
   languages.python = {
@@ -13,11 +11,37 @@
     version = "3.13";
     uv.enable = true;
     uv.sync.enable = true;
+    uv.package = pkgs.uv;
   };
 
   enterShell = ''
-    onefetch
   '';
+
+  processes = {
+  };
+    # api.exec = "export TESTING=1 && uv run api";
+
+  # https://devenv.sh/services/
+  services = {
+    # nginx = {
+    #   enable = true;
+    #   httpConfig = ''{
+    #     server {
+    #       listen 8080;
+    #       location / {
+    #         return 200 "Hello, world!";
+    #       }
+    #     }
+    #   }'';
+    # };
+  };
+
+  containers = {
+    test = {
+      name = "stargazer-test";
+      startupCommand = "export TESTING=1 && uv sync && uv run api";
+    };
+  };
 
   # https://devenv.sh/tasks/
   # tasks = {
@@ -26,9 +50,11 @@
   # };
 
   # https://devenv.sh/tests/
+    # wait_for_port 8080
   enterTest = ''
-    echo "Running tests"
-    git --version | grep --color=auto "${pkgs.git.version}"
+    export TESTING=1 && uv run api &
+    wait_for_port 5000
+    uv run pytest
   '';
 
   # https://devenv.sh/git-hooks/

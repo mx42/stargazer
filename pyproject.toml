@@ -15,7 +15,14 @@ dependencies = [
 
 [project.scripts]
 api = "stargazer.main:main"
+apitest = "stargazer.main:maintest"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "mock>=5.2.0",
+    "pytest>=8.3.5",
+]

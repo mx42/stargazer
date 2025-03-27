@@ -8,28 +8,31 @@ Probably a solution involving GraphQL would have been relevant.
 import duckdb
 import logging
 
+INIT_SQL = """
+    create table if not exists repo_stars (owner STRING, repo STRING, starred_by STRING, cached_at TIMESTAMP);
+    create table if not exists users_stars (user STRING, starred_repo STRING, cached_at TIMESTAMP);
+"""
+
 
 class Cacher:
     """
     Cache layer access object
     """
 
-    def __init__(self, database: str, max_age_d: int, fetcher):
+    def __init__(self, database: str | None, max_age_d: int, fetcher):
         """
         Constructor - initializes DuckDB connection.
 
-        :param database: database file for duckdb
+        :param database: database file for duckdb - if None, operates in-memory
         :param max_age_d: max age to cache data for, in days
         :param fetcher: fetcher reference
         """
         # Database file initialization
-        self.conn = duckdb.connect(database)
-        self.conn.sql(
-            """
-            create table if not exists repo_stars (owner STRING, repo STRING, starred_by STRING, cached_at TIMESTAMP);
-            create table if not exists users_stars (user STRING, starred_repo STRING, cached_at TIMESTAMP);
-            """
-        )
+        if database:
+            self.conn = duckdb.connect(database)
+        else:
+            self.conn = duckdb.connect()
+        self.conn.sql(INIT_SQL)
         # TODO: Clean-up old data? Currently data is just filtered out, it might become a mess after some weeks of using it.
         # Also: maybe we can pull all the data in memory... depends on volume.
 
