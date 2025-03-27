@@ -73,9 +73,14 @@ The code architecture is pretty simple, there's the API endpoint, a "Cacher" to 
 Next Steps
 ----------
 * Add/finish implementing tests
+* Enhance CI
+Add reports, etc.
 * Add authentication
 Adding some basic auth should be doable quite quickly using flask-security for example.
 Actually, since this is a GitHub project, I wonder if one can't "just" create a GitHub App and use the user's tokens to access the API, directly.
 Maybe even use GH Pages to publish it? I've never used it, I'm not sure it's possible to have server-side processing, to be further explored.
+* Benchmark/optimize
+There are a couple of things that should be benchmarked to be better configured, like the GH query throttling, the DB writes etc.
+Also maybe there is some way to reduce the API response payload by querying only relevant fields? To be investigated as the API seems quite slow.
 * Add new services
 For example build graphs, output stats, compare different repos, link users, etc.
